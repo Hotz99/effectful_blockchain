@@ -1,0 +1,155 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Agent: Run on Current File",
+      "type": "shell",
+      "command": "${workspaceFolder}/.claude/scripts/run-copilot.sh",
+      "args": [
+        "${input:agentName}",
+        "${input:instruction}",
+        "--file=${file}",
+        "--apply=prompt"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Agent: Run on Current File (Auto-apply)",
+      "type": "shell",
+      "command": "${workspaceFolder}/.claude/scripts/run-copilot.sh",
+      "args": [
+        "${input:agentName}",
+        "${input:instruction}",
+        "--file=${file}",
+        "--apply=yes"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Agent: Run on Current File (Preview Only)",
+      "type": "shell",
+      "command": "${workspaceFolder}/.claude/scripts/run-copilot.sh",
+      "args": [
+        "${input:agentName}",
+        "${input:instruction}",
+        "--file=${file}",
+        "--apply=no"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Agent: Run with Specific Skills",
+      "type": "shell",
+      "command": "${workspaceFolder}/.claude/scripts/run-copilot.sh",
+      "args": [
+        "${input:agentName}",
+        "${input:instruction}",
+        "--skills=${input:skills}",
+        "--file=${file}",
+        "--apply=prompt"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Agent: Dry Run",
+      "type": "shell",
+      "command": "${workspaceFolder}/.claude/scripts/run-copilot.sh",
+      "args": [
+        "${input:agentName}",
+        "${input:instruction}",
+        "--file=${file}",
+        "--dry-run"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Agent: Build Prompt Only",
+      "type": "shell",
+      "command": "${workspaceFolder}/.claude/scripts/build-prompt.sh",
+      "args": [
+        "${input:agentName}",
+        "--file=${file}",
+        "--out=/tmp/prompt_${input:agentName}_${fileDirname}_${fileBasenameNoExtension}.md"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Pipeline: Validate",
+      "type": "shell",
+      "command": "${workspaceFolder}/.claude/scripts/validate-pipeline.sh",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Pipeline: View Recent Logs",
+      "type": "shell",
+      "command": "ls -lth ${workspaceFolder}/.claude/scripts/.cli-llm/logs/ | head -20",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "agentName",
+      "type": "pickString",
+      "description": "Select agent",
+      "options": [
+        "effect-expert",
+        "domain-modeler",
+        "react-expert",
+        "test-writer",
+        "spec-writer"
+      ],
+      "default": "effect-expert"
+    },
+    {
+      "id": "instruction",
+      "type": "promptString",
+      "description": "What should the agent do?"
+    },
+    {
+      "id": "skills",
+      "type": "promptString",
+      "description": "Comma-separated skill names (or leave empty for all)",
+      "default": ""
+    }
+  ]
+}
