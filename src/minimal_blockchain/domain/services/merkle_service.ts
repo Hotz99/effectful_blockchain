@@ -8,10 +8,16 @@
  * - MerkleBuild — builds trees from data blocks
  * - MerkleRoot — computes and manages root hashes
  * - MerkleProofService — generates and verifies proofs
+ *
+ * Dependencies:
+ * - MerkleBuild and MerkleProofService require HashingService for hash computation
+ *
+ * @module MerkleService
+ * @since 0.2.0
  */
 
-import { Chunk, Context, Either, Layer, Option } from "effect";
-import { sha256, combineHashes } from "./crypto";
+import { Chunk, Context, Effect, Either, Layer, Option } from "effect";
+import { HashingService } from "../crypto";
 import {
   makeLeafNode,
   makeMerkleTree,
@@ -25,7 +31,7 @@ import {
   InvalidProofError,
   ValidDataIndex,
   MerkleProofStep,
-} from "./merkle_tree";
+} from "../entities/merkle_tree";
 
 // ============================================================================
 // CAPABILITY: MERKLE BUILD
@@ -33,6 +39,9 @@ import {
 
 /**
  * MerkleBuild capability — builds Merkle trees from data blocks
+ *
+ * @category Capabilities
+ * @since 0.2.0
  */
 export class MerkleBuild extends Context.Tag("@services/merkle/MerkleBuild")<
   MerkleBuild,
@@ -44,10 +53,12 @@ export class MerkleBuild extends Context.Tag("@services/merkle/MerkleBuild")<
 /**
  * Core level processing — shared by build and proof generation
  * Pairs nodes, computes hashes, and optionally tracks proof steps
+ * @internal
  */
 const processLevel = (
   currentLevel: Chunk.NonEmptyChunk<MerkleNode>,
-  currentIndex: Option.Option<ValidDataIndex>
+  currentIndex: Option.Option<ValidDataIndex>,
+  combineHashesFn: (left: MerkleHash, right: MerkleHash) => MerkleHash
 ): {
   nextLevel: Chunk.NonEmptyChunk<MerkleNode>;
   maybeProofStep: Option.Option<MerkleProofStep>;
@@ -62,7 +73,7 @@ const processLevel = (
     const left = Chunk.unsafeGet(currentLevel, i);
     const right = i + 1 < size ? Chunk.unsafeGet(currentLevel, i + 1) : left;
 
-    const hash = combineHashes(left.hash, right.hash);
+    const hash = combineHashesFn(left.hash, right.hash);
     const parent = makeInternalNode(left, right, hash);
     nextLevel = Chunk.append(nextLevel, parent);
 
@@ -90,18 +101,26 @@ const processLevel = (
 };
 
 /**
- * Pure implementation of buildNextLevel — reuses processLevel
+ * Pure implementation of buildNextLevel
+ * @internal
  */
-const buildNextLevel = (currentLevel: Chunk.NonEmptyChunk<MerkleNode>) =>
-  processLevel(currentLevel, Option.none()).nextLevel;
+const buildNextLevel = (
+  currentLevel: Chunk.NonEmptyChunk<MerkleNode>,
+  combineHashesFn: (left: MerkleHash, right: MerkleHash) => MerkleHash
+) => processLevel(currentLevel, Option.none(), combineHashesFn).nextLevel;
 
 /**
  * Pure implementation of build
+ * @internal
  */
-const buildPure = (data: Chunk.NonEmptyChunk<string>) => {
+const buildPure = (
+  data: Chunk.NonEmptyChunk<string>,
+  sha256Fn: (data: string) => MerkleHash,
+  combineHashesFn: (left: MerkleHash, right: MerkleHash) => MerkleHash
+) => {
   // Create leaf nodes
   const leaves = Chunk.map(data, (block) => {
-    const hash = sha256(block);
+    const hash = sha256Fn(block);
     return makeLeafNode(block, hash);
   });
 
@@ -109,7 +128,7 @@ const buildPure = (data: Chunk.NonEmptyChunk<string>) => {
   let currentLevel = leaves;
 
   while (Chunk.size(currentLevel) > 1)
-    currentLevel = buildNextLevel(currentLevel);
+    currentLevel = buildNextLevel(currentLevel, combineHashesFn);
 
   // Root is the last remaining node
   const root = Chunk.headNonEmpty(currentLevel);
@@ -119,11 +138,18 @@ const buildPure = (data: Chunk.NonEmptyChunk<string>) => {
 
 /**
  * Live implementation of MerkleBuild
+ *
+ * @category Services
+ * @since 0.2.0
  */
-export const MerkleBuildLive = Layer.succeed(
+export const MerkleBuildLive = Layer.effect(
   MerkleBuild,
-  MerkleBuild.of({
-    build: buildPure,
+  Effect.gen(function* () {
+    const hashing = yield* HashingService;
+
+    return MerkleBuild.of({
+      build: (data) => buildPure(data, hashing.sha256, hashing.combineHashes),
+    });
   })
 );
 
@@ -144,23 +170,34 @@ export class MerkleRoot extends Context.Tag("@services/merkle/MerkleRoot")<
 
 /**
  * Pure implementation of recomputeRoot
+ * @internal
  */
-const recomputeRootPure = (tree: MerkleTree) => {
+const recomputeRootPure = (
+  tree: MerkleTree,
+  combineHashesFn: (left: MerkleHash, right: MerkleHash) => MerkleHash
+) => {
   let currentLevel = tree.leaves;
   while (Chunk.size(currentLevel) > 1) {
-    currentLevel = buildNextLevel(currentLevel);
+    currentLevel = buildNextLevel(currentLevel, combineHashesFn);
   }
   return Chunk.headNonEmpty(currentLevel).hash;
 };
 
 /**
  * Live implementation of MerkleRoot
+ *
+ * @category Services
+ * @since 0.2.0
  */
-export const MerkleRootLive = Layer.succeed(
+export const MerkleRootLive = Layer.effect(
   MerkleRoot,
-  MerkleRoot.of({
-    getRootHash: (tree: MerkleTree) => tree.root.hash,
-    recomputeRoot: recomputeRootPure,
+  Effect.gen(function* () {
+    const hashing = yield* HashingService;
+
+    return MerkleRoot.of({
+      getRootHash: (tree: MerkleTree) => tree.root.hash,
+      recomputeRoot: (tree) => recomputeRootPure(tree, hashing.combineHashes),
+    });
   })
 );
 
@@ -189,10 +226,12 @@ export class MerkleProofService extends Context.Tag(
 
 /**
  * Pure implementation of generateProof
+ * @internal
  */
 const generateProofPure = (
   tree: MerkleTree,
-  dataIndex: ValidDataIndex
+  dataIndex: ValidDataIndex,
+  combineHashesFn: (left: MerkleHash, right: MerkleHash) => MerkleHash
 ): MerkleProof => {
   let currentLevel = tree.leaves;
   let currentIndex = Option.some(dataIndex);
@@ -201,7 +240,8 @@ const generateProofPure = (
   while (Chunk.size(currentLevel) > 1) {
     const { nextLevel, maybeProofStep, nextIndex } = processLevel(
       currentLevel,
-      currentIndex
+      currentIndex,
+      combineHashesFn
     );
 
     if (Option.isSome(maybeProofStep))
@@ -215,15 +255,23 @@ const generateProofPure = (
   return makeMerkleProof(proofSteps, dataIndex, data);
 };
 
-const verifyProofPure = (proof: MerkleProof, rootHash: MerkleHash) => {
-  let currentHash = sha256(proof.data);
+/**
+ * Pure implementation of verifyProof
+ * @internal
+ */
+const verifyProofPure = (
+  proof: MerkleProof,
+  rootHash: MerkleHash,
+  sha256Fn: (data: string) => MerkleHash
+) => {
+  let currentHash = sha256Fn(proof.data);
 
   for (const step of proof.steps) {
     const combined = step.isLeft
       ? step.siblingHash + currentHash
       : currentHash + step.siblingHash;
 
-    currentHash = sha256(combined);
+    currentHash = sha256Fn(combined);
   }
 
   return currentHash === rootHash
@@ -239,12 +287,21 @@ const verifyProofPure = (proof: MerkleProof, rootHash: MerkleHash) => {
 
 /**
  * Live implementation of MerkleProofService
+ *
+ * @category Services
+ * @since 0.2.0
  */
-export const MerkleProofServiceLive = Layer.succeed(
+export const MerkleProofServiceLive = Layer.effect(
   MerkleProofService,
-  MerkleProofService.of({
-    generateProof: generateProofPure,
-    verifyProof: verifyProofPure,
+  Effect.gen(function* () {
+    const hashing = yield* HashingService;
+
+    return MerkleProofService.of({
+      generateProof: (tree, dataIndex) =>
+        generateProofPure(tree, dataIndex, hashing.combineHashes),
+      verifyProof: (proof, rootHash) =>
+        verifyProofPure(proof, rootHash, hashing.sha256),
+    });
   })
 );
 
@@ -358,6 +415,11 @@ export const MerkleDisplayLive = Layer.succeed(
 
 /**
  * All Merkle service layers combined for convenience
+ *
+ * Requires: HashingService
+ *
+ * @category Services
+ * @since 0.2.0
  */
 export const MerkleServiceLive = Layer.mergeAll(
   MerkleBuildLive,

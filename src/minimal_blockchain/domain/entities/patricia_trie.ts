@@ -10,6 +10,7 @@
  * - No side effects, no async logic, no logging
  *
  * ## Formal Constraints
+ * // TODO find implementation reference for each of the below
  *
  * ### Key / Nibble Representation
  * - Keys are represented as nibble arrays: `nibbles: readonly number[]` where each element is an integer between 0 and 15 inclusive.
@@ -17,9 +18,9 @@
  *
  * ### Node Kinds and Path Segmentation
  * - `kind` ∈ { "branch", "extension", "leaf" }.
- *   - For `kind = "extension"`: the node has exactly one child and `value = None`, nibbles.length ≥ 1.
- *   - For `kind = "leaf"`: the node has no children (`children.size = 0`) and `value = Some(v)`.
- *   - For `kind = "branch"`: the node may have 0 to 16 children and `value` may be `Some(v)` or `None`, nibbles is empty array.
+ *   - `kind = "branch"`: the node may have 0 to 16 children and `value` may be `Some(v)` or `None`, nibbles is empty array.
+ *   - `kind = "extension"`: the node has exactly one child and `value = None`, nibbles.length ≥ 1.
+ *   - `kind = "leaf"`: the node has no children (`children.size = 0`) and `value = Some(v)`.
  *
  * ### Path Sharing / Compression
  * - No branch node should have exactly one non‑null child (violates path compression).
@@ -44,15 +45,29 @@ import * as Option from "effect/Option";
 import * as Equivalence from "effect/Equivalence";
 import * as Array from "effect/Array";
 
-const PatriciaNodeKeySchema = Schema.String;
+// TODO refine this
+const NodeKeySchema = Schema.String;
 
-export type PatriciaNodeKey = typeof PatriciaNodeKeySchema.Type;
+export type NodeKey = typeof NodeKeySchema.Type;
 
-const NibblesSchema = Schema.Array(
-  Schema.Number.pipe(Schema.int(), Schema.between(0, 15))
-);
+const NibbleSchema = Schema.Number.pipe(Schema.int(), Schema.between(0, 15));
+
+// 1 hex digit = 4 bits = 1 nibble ∈ { 0,1 }^4 = [ 0, 15 ]
+export const NibblesSchema = Schema.Array(NibbleSchema);
+// const NibblesSchema = Schema.Array(NibbleSchema).pipe(Schema.minItems(1));
 
 export type Nibbles = typeof NibblesSchema.Type;
+
+// TODO refine & add more variants of `value`:
+// - `AccountBalance`: a positive real number
+// - `AccountState`
+// - `TransactionData`
+export const NodeValueSchema = Schema.Union(
+  Schema.Number.pipe(Schema.greaterThanOrEqualTo(0)),
+  Schema.String
+);
+
+export type NodeValue = typeof NodeValueSchema.Type;
 
 // ============================================================================
 // PATRICIA NODE TYPES & SCHEMAS
@@ -61,17 +76,20 @@ export type Nibbles = typeof NibblesSchema.Type;
 // Base fields for each node type
 const leafFields = {
   _tag: Schema.Literal("leaf"),
-  nibbles: NibblesSchema,
-  value: Schema.Unknown,
+  keyEnd: NibblesSchema,
+  value: NodeValueSchema,
 };
 
 const extensionFields = {
   _tag: Schema.Literal("extension"),
-  nibbles: NibblesSchema,
+  sharedPrefix: NibblesSchema,
 };
 
 const branchFields = {
   _tag: Schema.Literal("branch"),
+  // all `ExtensionNode`s derive from a parent `BranchNode` & have no `value`
+  // this enables storing a `value` with `key` == `nibblesOfParentBranchNode`
+  // if `Option.isSome(ExtensionNode.value)`, key for this node is the nibbles of said node
   value: Schema.OptionFromNullOr(Schema.Unknown),
 };
 
@@ -84,7 +102,7 @@ export interface ExtensionNode
 }
 
 export interface BranchNode extends Schema.Struct.Type<typeof branchFields> {
-  readonly children: Record<PatriciaNodeKey, PatriciaNode>;
+  readonly children: Record<NodeKey, PatriciaNode>;
 }
 
 export type PatriciaNode = LeafNode | ExtensionNode | BranchNode;
@@ -98,7 +116,7 @@ interface ExtensionNodeEncoded
 }
 
 interface BranchNodeEncoded extends Schema.Struct.Encoded<typeof branchFields> {
-  readonly children: Record<PatriciaNodeKey, PatriciaNodeEncoded>;
+  readonly children: Record<NodeKey, PatriciaNodeEncoded>;
 }
 
 type PatriciaNodeEncoded =
@@ -118,8 +136,11 @@ type PatriciaNodeEncoded =
  * @category Schemas
  * @since 0.2.0
  */
-export const LeafNodeSchema: Schema.Schema<LeafNode, LeafNodeEncoded> =
-  Schema.Struct(leafFields);
+// export const LeafNodeSchema = Schema.Struct(leafFields);
+export const LeafNodeSchema = Schema.TaggedStruct("leaf", {
+  keyEnd: NibblesSchema,
+  value: NodeValueSchema,
+});
 
 /**
  * Extension node schema.
@@ -133,15 +154,6 @@ export const LeafNodeSchema: Schema.Schema<LeafNode, LeafNodeEncoded> =
  * @category Schemas
  * @since 0.2.0
  */
-export const ExtensionNodeSchema: Schema.Schema<
-  ExtensionNode,
-  ExtensionNodeEncoded
-> = Schema.Struct({
-  ...extensionFields,
-  nextNode: Schema.suspend(
-    (): Schema.Schema<PatriciaNode, PatriciaNodeEncoded> => PatriciaNodeSchema
-  ),
-});
 
 /**
  * Branch node schema.
@@ -158,17 +170,24 @@ export const ExtensionNodeSchema: Schema.Schema<
  * @category Schemas
  * @since 0.2.0
  */
-export const BranchNodeSchema: Schema.Schema<BranchNode, BranchNodeEncoded> =
-  Schema.Struct({
-    ...branchFields,
-    children: Schema.Record({
-      key: PatriciaNodeKeySchema,
-      value: Schema.suspend(
-        (): Schema.Schema<PatriciaNode, PatriciaNodeEncoded> =>
-          PatriciaNodeSchema
-      ),
-    }),
-  });
+export const BranchNodeSchema = Schema.Struct({
+  ...branchFields,
+  children: Schema.Record({
+    key: NodeKeySchema,
+    value: Schema.suspend(
+      (): Schema.Schema<PatriciaNode, PatriciaNodeEncoded> => PatriciaNodeSchema
+    ),
+  }),
+});
+
+export const ExtensionNodeSchema = Schema.Struct({
+  ...extensionFields,
+  // TODO why not specify as BranchNodeSchema ?
+  // nextNode: BranchNodeSchema,
+  nextNode: Schema.suspend(
+    (): Schema.Schema<PatriciaNode, PatriciaNodeEncoded> => PatriciaNodeSchema
+  ),
+});
 
 /**
  * PatriciaNode is a discriminated union of three node kinds.
@@ -181,10 +200,11 @@ export const BranchNodeSchema: Schema.Schema<BranchNode, BranchNodeEncoded> =
  * @category Schemas
  * @since 0.2.0
  */
-export const PatriciaNodeSchema: Schema.Schema<
-  PatriciaNode,
-  PatriciaNodeEncoded
-> = Schema.Union(LeafNodeSchema, ExtensionNodeSchema, BranchNodeSchema);
+export const PatriciaNodeSchema = Schema.Union(
+  LeafNodeSchema,
+  ExtensionNodeSchema,
+  BranchNodeSchema
+);
 
 // ============================================================================
 // PATRICIA TRIE SCHEMA
@@ -218,7 +238,7 @@ export class KeyNotFoundError extends Schema.TaggedError<KeyNotFoundError>()(
   "KeyNotFoundError",
   {
     message: Schema.String,
-    key: PatriciaNodeKeySchema,
+    key: NodeKeySchema,
   }
 ) {}
 
@@ -235,20 +255,6 @@ export class InvalidNodeError extends Schema.TaggedError<InvalidNodeError>()(
 // ============================================================================
 
 /**
- * Type guard for PatriciaNode.
- *
- * @category Guards
- * @since 0.2.0
- * @example
- * import * as PatriciaTrie from "./patricia_trie"
- *
- * if (PatriciaTrie.isPatriciaNode(value)) {
- *   // value is PatriciaNode
- * }
- */
-export const isPatriciaNode = Schema.is(PatriciaNodeSchema);
-
-/**
  * Refine to BranchNode.
  *
  * @category Guards
@@ -260,8 +266,7 @@ export const isPatriciaNode = Schema.is(PatriciaNodeSchema);
  *   // node is BranchNode
  * }
  */
-export const isBranch = (self: PatriciaNode): self is BranchNode =>
-  self._tag === "branch";
+export const isBranch = Schema.is(BranchNodeSchema);
 
 /**
  * Refine to ExtensionNode.
@@ -275,8 +280,7 @@ export const isBranch = (self: PatriciaNode): self is BranchNode =>
  *   // node is ExtensionNode
  * }
  */
-export const isExtension = (self: PatriciaNode): self is ExtensionNode =>
-  self._tag === "extension";
+export const isExtension = Schema.is(ExtensionNodeSchema);
 
 /**
  * Refine to LeafNode.
@@ -290,8 +294,21 @@ export const isExtension = (self: PatriciaNode): self is ExtensionNode =>
  *   // node is LeafNode
  * }
  */
-export const isLeaf = (self: PatriciaNode): self is LeafNode =>
-  self._tag === "leaf";
+export const isLeaf = Schema.is(LeafNodeSchema);
+
+/**
+ * Type guard for PatriciaNode.
+ *
+ * @category Guards
+ * @since 0.2.0
+ * @example
+ * import * as PatriciaTrie from "./patricia_trie"
+ *
+ * if (PatriciaTrie.isPatriciaNode(value)) {
+ *   // value is PatriciaNode
+ * }
+ */
+export const isPatriciaNode = Schema.is(PatriciaNodeSchema);
 
 // ============================================================================
 // CONSTRUCTORS
@@ -315,19 +332,10 @@ export const isLeaf = (self: PatriciaNode): self is LeafNode =>
  *   value: Option.some("branch_value")
  * })
  */
-export const makeBranch = (props?: {
-  children?: Record<string, PatriciaNode>;
-  value?: Option.Option<unknown>;
-}): BranchNode => {
-  const children = props?.children ?? {};
-  const value = props?.value ?? Option.none();
-
-  return {
-    _tag: "branch" as const,
-    children,
-    value,
-  };
-};
+export const makeBranch = (props: {
+  children: Record<string, PatriciaNode>;
+  value: Option.Option<unknown>;
+}): BranchNode => BranchNodeSchema.make({ _tag: "branch", ...props });
 
 /**
  * Create an extension node (nibbles + single child).
@@ -348,35 +356,9 @@ export const makeBranch = (props?: {
  * })
  */
 export const makeExtension = (props: {
-  nibbles: readonly number[];
+  sharedPrefix: Nibbles;
   nextNode: PatriciaNode;
-}): ExtensionNode => {
-  const { nibbles, nextNode } = props;
-
-  // Validate: extension must have nibbles.length >= 1
-  if (nibbles.length === 0) {
-    throw new InvalidNodeError({
-      message: "Extension node must have at least one nibble",
-      reason: "empty_extension_path",
-    });
-  }
-
-  // Validate: all nibbles must be in range [0, 15]
-  for (const n of nibbles) {
-    if (typeof n !== "number" || n < 0 || n > 15) {
-      throw new InvalidNodeError({
-        message: "All nibbles must be in range [0, 15]",
-        reason: "invalid_nibble_range",
-      });
-    }
-  }
-
-  return {
-    _tag: "extension" as const,
-    nibbles: [...nibbles],
-    nextNode,
-  };
-};
+}): ExtensionNode => ExtensionNodeSchema.make({ _tag: "extension", ...props });
 
 /**
  * Create a leaf node (nibbles + value).
@@ -397,33 +379,14 @@ export const makeExtension = (props: {
  * })
  */
 export const makeLeaf = (props: {
-  nibbles: Nibbles;
-  // TODO `value` is one of:
-  // - `AccountState`
-  // - `TransactionData`
-  value: unknown;
-}): LeafNode => {
-  const { nibbles, value } = props;
-
-  // Validate: all nibbles must be in range [0, 15]
-  for (const n of nibbles) {
-    if (typeof n !== "number" || n < 0 || n > 15) {
-      throw new InvalidNodeError({
-        message: "All nibbles must be in range [0, 15]",
-        reason: "invalid_nibble_range",
-      });
-    }
-  }
-
-  return {
-    _tag: "leaf" as const,
-    nibbles: [...nibbles],
-    value: Option.some(value),
-  };
-};
+  keyEnd: Nibbles;
+  value: NodeValue;
+}): LeafNode => LeafNodeSchema.make({ _tag: "leaf", ...props });
 
 /**
  * Create an empty trie (root is empty branch).
+ *
+ * Canonical empty-trie root per Ethereum’s Yellow Paper is the empty string `""`, with Keccak-256 hash `0x56e81f17…` .
  *
  * @category Constructors
  * @since 0.2.0
@@ -433,7 +396,7 @@ export const makeLeaf = (props: {
  * const trie = PatriciaTrie.makeEmptyTrie()
  */
 export const makeEmptyTrie = (): PatriciaTrie => ({
-  root: makeBranch(),
+  root: makeBranch({ children: {}, value: Option.none() }),
   size: 0,
 });
 
@@ -455,6 +418,11 @@ export const makeTrie = (root: PatriciaNode, size: number): PatriciaTrie => ({
 // ============================================================================
 // EQUIVALENCE
 // ============================================================================
+
+export const NibblesEquivalence: Equivalence.Equivalence<Nibbles> =
+  Equivalence.make(
+    (a, b) => a.length === b.length && Array.every(a, (n, i) => n === b[i])
+  );
 
 /**
  * Structural equality for PatriciaNode.
@@ -478,20 +446,20 @@ export const makeTrie = (root: PatriciaNode, size: number): PatriciaTrie => ({
  */
 export const NodeEquivalence: Equivalence.Equivalence<PatriciaNode> =
   Equivalence.make((a, b) => {
-    // Check tag
     if (a._tag !== b._tag) return false;
 
     // Leaf: compare nibbles and value
     if (a._tag === "leaf" && b._tag === "leaf") {
-      if (a.nibbles.length !== b.nibbles.length) return false;
-      if (!Array.every(a.nibbles, (n, i) => n === b.nibbles[i])) return false;
+      if (a.keyEnd.length !== b.keyEnd.length) return false;
+      if (!Array.every(a.keyEnd, (n, i) => n === b.keyEnd[i])) return false;
       return a.value === b.value;
     }
 
     // Extension: compare nibbles and nextNode recursively
     if (a._tag === "extension" && b._tag === "extension") {
-      if (a.nibbles.length !== b.nibbles.length) return false;
-      if (!Array.every(a.nibbles, (n, i) => n === b.nibbles[i])) return false;
+      if (a.sharedPrefix.length !== b.sharedPrefix.length) return false;
+      if (!Array.every(a.sharedPrefix, (n, i) => n === b.sharedPrefix[i]))
+        return false;
       return NodeEquivalence(a.nextNode, b.nextNode);
     }
 
@@ -542,86 +510,6 @@ export const TrieEquivalence: Equivalence.Equivalence<PatriciaTrie> =
   });
 
 // ============================================================================
-// DESTRUCTORS (Safe extraction of inner values)
-// ============================================================================
-
-/**
- * Get the trie size (number of key-value pairs).
- *
- * @category Destructors
- * @since 0.2.0
- * @example
- * import * as PatriciaTrie from "./patricia_trie"
- *
- * const size = PatriciaTrie.getSize(trie)
- */
-export const getSize = (trie: PatriciaTrie): number => trie.size;
-
-/**
- * Get the root node.
- *
- * @category Destructors
- * @since 0.2.0
- * @example
- * import * as PatriciaTrie from "./patricia_trie"
- *
- * const root = PatriciaTrie.getRoot(trie)
- */
-export const getRoot = (trie: PatriciaTrie): PatriciaNode => trie.root;
-
-/**
- * Get the nibbles from a leaf or extension node.
- *
- * @category Destructors
- * @since 0.2.0
- * @example
- * import * as PatriciaTrie from "./patricia_trie"
- *
- * const nibbles = PatriciaTrie.getNibbles(node)
- */
-export const getNibbles = (node: LeafNode | ExtensionNode): readonly number[] =>
-  node.nibbles;
-
-/**
- * Get the children from a branch node.
- *
- * @category Destructors
- * @since 0.2.0
- * @example
- * import * as PatriciaTrie from "./patricia_trie"
- *
- * const children = PatriciaTrie.getChildren(branchNode)
- */
-export const getChildren = (node: BranchNode): Record<string, PatriciaNode> =>
-  node.children;
-
-/**
- * Get the next node from an extension node.
- *
- * @category Destructors
- * @since 0.2.0
- * @example
- * import * as PatriciaTrie from "./patricia_trie"
- *
- * const nextNode = PatriciaTrie.getNextNode(extensionNode)
- */
-export const getNextNode = (node: ExtensionNode): PatriciaNode => node.nextNode;
-
-/**
- * Get the value from a leaf or branch node.
- *
- * @category Destructors
- * @since 0.2.0
- * @example
- * import * as PatriciaTrie from "./patricia_trie"
- *
- * const value = PatriciaTrie.getValue(node)
- */
-export const getValue = (
-  node: LeafNode | BranchNode
-): unknown | Option.Option<unknown> => node.value;
-
-// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -640,31 +528,5 @@ export const PatriciaTrie = {
   Schema: PatriciaTrieSchema,
   makeEmpty: makeEmptyTrie,
   make: makeTrie,
-  getSize,
-  getRoot,
   Equivalence: TrieEquivalence,
-};
-
-/**
- * PatriciaNode constructors and types.
- *
- * @category API
- * @since 0.2.0
- */
-export const PatriciaNode = {
-  Schema: PatriciaNodeSchema,
-  BranchSchema: BranchNodeSchema,
-  ExtensionSchema: ExtensionNodeSchema,
-  LeafSchema: LeafNodeSchema,
-  makeBranch,
-  makeExtension,
-  makeLeaf,
-  isBranch,
-  isExtension,
-  isLeaf,
-  getNibbles,
-  getChildren,
-  getNextNode,
-  getValue,
-  Equivalence: NodeEquivalence,
 };

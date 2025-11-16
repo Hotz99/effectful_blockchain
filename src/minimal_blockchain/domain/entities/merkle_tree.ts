@@ -80,7 +80,7 @@ export const MerkleNodeSchema: Schema.Struct<MerkleNodeSchemaType> =
     right: Schema.OptionFromNullOr(Schema.suspend((): any => MerkleNodeSchema)),
     isLeaf: Schema.Boolean,
     data: Schema.OptionFromNullOr(Schema.String),
-  }) as any;
+  });
 
 export type MerkleNode = Schema.Schema.Type<typeof MerkleNodeSchema>;
 

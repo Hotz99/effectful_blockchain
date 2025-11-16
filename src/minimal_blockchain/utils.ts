@@ -1,6 +1,6 @@
-import { Effect, Chunk } from "effect";
-import { Block } from "./domain/block";
-import { BlockchainState, Blockchain } from "./domain/blockchain";
+import { Effect, Chunk, Option } from "effect";
+import { BlockchainState } from "./domain/entities/blockchain";
+import { BlockchainService } from "./domain/services/blockchain_service";
 
 export const shortenHash = (
   hash: string,
@@ -35,7 +35,8 @@ export const displayChain = (state: BlockchainState) =>
   Effect.log("BLOCKCHAIN VISUALIZATION").pipe(
     Effect.annotateLogs({
       totalBlocks: Chunk.size(state.chain),
-      pendingEvents: Chunk.size(state.pendingEvents),
+      pendingEvents: Option.getOrElse(state.pendingEvents, () => Chunk.empty())
+        .length,
       chain: state.chain,
     }),
     Effect.withLogSpan("displayChain")
@@ -43,7 +44,8 @@ export const displayChain = (state: BlockchainState) =>
 
 export const displayStats = (state: BlockchainState) =>
   Effect.gen(function* () {
-    const stats = Blockchain.getStats(state);
+    const service = yield* BlockchainService;
+    const stats = service.getStats(state);
     yield* Effect.log("BLOCKCHAIN STATISTICS").pipe(
       Effect.annotateLogs({
         totalBlocks: stats.totalBlocks,
@@ -56,15 +58,18 @@ export const displayStats = (state: BlockchainState) =>
   });
 
 export const displayValidation = (state: BlockchainState) =>
-  Effect.matchEffect(Blockchain.validateChain(state), {
-    onFailure: (error) =>
-      Effect.log(`✗ Invalid: ${error}`).pipe(
-        Effect.annotateLogs({ isValid: false, error }),
-        Effect.withLogSpan("validation")
-      ),
-    onSuccess: () =>
-      Effect.log("✓ BLOCKCHAIN IS VALID!").pipe(
-        Effect.annotateLogs({ isValid: true }),
-        Effect.withLogSpan("validation")
-      ),
+  Effect.gen(function* () {
+    const service = yield* BlockchainService;
+    return Effect.matchEffect(service.validateChain(state), {
+      onFailure: (error) =>
+        Effect.log(`✗ Invalid: ${error}`).pipe(
+          Effect.annotateLogs({ isValid: false, error }),
+          Effect.withLogSpan("validation")
+        ),
+      onSuccess: () =>
+        Effect.log("✓ BLOCKCHAIN IS VALID!").pipe(
+          Effect.annotateLogs({ isValid: true }),
+          Effect.withLogSpan("validation")
+        ),
+    });
   });

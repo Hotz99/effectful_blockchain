@@ -11,8 +11,9 @@ import {
   MerkleRoot,
   MerkleDisplay,
   MerkleServiceLive,
-} from "./domain/merkle_service";
-import { makeValidDataIndex } from "./domain/merkle_tree";
+} from "./domain/services/merkle_service";
+import { HashingServiceLive } from "./domain/crypto";
+import { makeValidDataIndex } from "./domain/entities/merkle_tree";
 
 const header = (title: string) => {
   const separator = "=".repeat(70);
@@ -120,6 +121,7 @@ const demonstration = Effect.gen(function* () {
  */
 const program = demonstration.pipe(
   Effect.provide(MerkleServiceLive),
+  Effect.provide(HashingServiceLive),
   Effect.provide(Logger.pretty)
 );
 
