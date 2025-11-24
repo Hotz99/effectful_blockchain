@@ -1,9 +1,9 @@
 {
-  "name": "@template/cli",
-  "version": "0.0.0",
+  "name": "effectful_blockchain",
+  "version": "0.1.0",
   "packageManager": "bun@1.3.1",
   "license": "MIT",
-  "description": "A basic Effect application",
+  "description": "Cryptographic data structures for blockchain applications using Effect-TS",
   "repository": {
     "type": "git",
     "url": "<PLACEHOLDER>"
@@ -16,13 +16,11 @@
     "build": "tsup && bun run copy-package-json",
     "build:ts": "tsup",
     "clean": "rimraf dist/*",
-    "minimal_blockchain": "tsx src/minimal_blockchain/main.ts",
-    "lab_2": "tsx src/lab_2/main.ts",
-    "merkle_demo": "tsx src/minimal_blockchain/merkle_demo.ts",
     "check": "tsc -b tsconfig.json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "copy-package-json": "tsx scripts/copy-package-json.ts"
+    "run:merkle": "tsx ./examples/merkle_tree_demo.ts",
+    "run:mpt": "tsx ./examples/mpt_demo.ts"
   },
   "devDependencies": {
     "@effect/language-service": "latest",
@@ -32,16 +30,11 @@
     "@types/node": "^22.5.2",
     "@vitest/coverage-v8": "3.2.4",
     "effect": "^3.17.7",
-    "ethers": "^6.15.0",
-    "tsup": "^8.2.4",
     "tsx": "^4.19.1",
     "typescript": "^5.6.2",
     "vitest": "^3.2.0"
   },
   "pnpm": {
     "patchedDependencies": {}
-  },
-  "dependencies": {
-    "@opentui/core": "^0.1.41"
   }
 }

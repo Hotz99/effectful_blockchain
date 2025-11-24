@@ -43,6 +43,11 @@
       "@template/cli/*": ["./src/*.js"]
     }
   },
-  "include": ["src/**/*.ts"],
+  "include": [
+    "src/**/*.ts",
+    "test/merkle_tree_service.test.ts",
+    "test/mpt_service.test.ts",
+    "test/utils/helpers.ts"
+  ],
   "exclude": ["dist", "node_modules"]
 }
