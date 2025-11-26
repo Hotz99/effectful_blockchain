@@ -1,16 +1,12 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Chunk, DateTime, Effect, Either, Layer } from "effect";
 import { makeValidDataIndex, MerkleHash } from "../src/entities/merkle_tree";
-import * as HashingService from "../src/services/merkle/hash";
-import { MerkleBuild } from "../src/services/merkle/build";
-import { MerkleProofService } from "../src/services/merkle/proof";
-import { MerkleRoot } from "../src/services/merkle/root";
-import * as MerkleTreeService from "../src/services/merkle";
+import * as MerkleTreeService from "../src/services/merkle_tree";
 import * as Event from "../src/entities/event";
 
 const TestLayer = Layer.provide(
   MerkleTreeService.MerkleServiceLive,
-  HashingService.HashingServiceLive
+  MerkleTreeService.HashingServiceLive
 );
 
 describe("Merkle Proof Generation & Verification", () => {
@@ -48,14 +44,14 @@ describe("Merkle Proof Generation & Verification", () => {
             })
           );
 
-          const builder = yield* MerkleBuild;
+          const builder = yield* MerkleTreeService.MerkleBuild;
           const tree = builder.build(transactions);
 
-          const merkleRoot = yield* MerkleRoot;
+          const merkleRoot = yield* MerkleTreeService.MerkleRoot;
           const rootHash = merkleRoot.getRootHash(tree);
 
           // Act: Generate proof for index 0
-          const proofService = yield* MerkleProofService;
+          const proofService = yield* MerkleTreeService.MerkleProofService;
           const dataIndex = Either.getOrThrow(makeValidDataIndex(tree, 0));
 
           const proof = proofService.generateProof(tree, dataIndex);
@@ -98,14 +94,14 @@ describe("Merkle Proof Generation & Verification", () => {
           })
         );
 
-        const builder = yield* MerkleBuild;
+        const builder = yield* MerkleTreeService.MerkleBuild;
         const tree = builder.build(transactions);
 
-        const merkleRoot = yield* MerkleRoot;
+        const merkleRoot = yield* MerkleTreeService.MerkleRoot;
         const rootHash = merkleRoot.getRootHash(tree);
 
         // Act: Generate proof for index 1 (middle)
-        const proofService = yield* MerkleProofService;
+        const proofService = yield* MerkleTreeService.MerkleProofService;
         const dataIndex = Either.getOrThrow(makeValidDataIndex(tree, 1));
 
         const proof = proofService.generateProof(tree, dataIndex);
@@ -128,14 +124,14 @@ describe("Merkle Proof Generation & Verification", () => {
           })
         );
 
-        const builder = yield* MerkleBuild;
+        const builder = yield* MerkleTreeService.MerkleBuild;
         const tree = builder.build(transactions);
 
-        const merkleRoot = yield* MerkleRoot;
+        const merkleRoot = yield* MerkleTreeService.MerkleRoot;
         const rootHash = merkleRoot.getRootHash(tree);
 
         // Act
-        const proofService = yield* MerkleProofService;
+        const proofService = yield* MerkleTreeService.MerkleProofService;
         const dataIndex = Either.getOrThrow(makeValidDataIndex(tree, 0));
 
         const proof = proofService.generateProof(tree, dataIndex);
@@ -162,13 +158,13 @@ describe("Merkle Proof Generation & Verification", () => {
           })
         );
 
-        const builder = yield* MerkleBuild;
+        const builder = yield* MerkleTreeService.MerkleBuild;
         const tree = builder.build(transactions);
 
-        const merkleRoot = yield* MerkleRoot;
+        const merkleRoot = yield* MerkleTreeService.MerkleRoot;
         const rootHash = merkleRoot.getRootHash(tree);
 
-        const proofService = yield* MerkleProofService;
+        const proofService = yield* MerkleTreeService.MerkleProofService;
         const dataIndex = Either.getOrThrow(makeValidDataIndex(tree, 0));
 
         const proof = proofService.generateProof(tree, dataIndex);
@@ -194,10 +190,10 @@ describe("Merkle Proof Generation & Verification", () => {
           })
         );
 
-        const builder = yield* MerkleBuild;
+        const builder = yield* MerkleTreeService.MerkleBuild;
         const tree = builder.build(transactions);
 
-        const proofService = yield* MerkleProofService;
+        const proofService = yield* MerkleTreeService.MerkleProofService;
         const dataIndex = Either.getOrThrow(makeValidDataIndex(tree, 0));
 
         const proof = proofService.generateProof(tree, dataIndex);
@@ -245,11 +241,11 @@ describe("Merkle Proof Generation & Verification", () => {
             })
           );
 
-          const builder = yield* MerkleBuild;
+          const builder = yield* MerkleTreeService.MerkleBuild;
           const tree = builder.build(transactions);
 
           // Act
-          const proofService = yield* MerkleProofService;
+          const proofService = yield* MerkleTreeService.MerkleProofService;
           const dataIndex = Either.getOrThrow(makeValidDataIndex(tree, 0));
 
           const proof = proofService.generateProof(tree, dataIndex);

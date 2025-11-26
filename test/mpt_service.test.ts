@@ -10,21 +10,17 @@ import {
 } from "effect";
 import { assertSome, assertNone } from "./utils/helpers";
 import * as MPT from "../src/entities/mpt";
-import * as MPTQuery from "../src/services/mpt/query";
-import * as MPTInsert from "../src/services/mpt/insert";
-import * as MPTDelete from "../src/services/mpt/delete";
-import * as MPTHash from "../src/services/mpt/hash";
-import * as MPTDisplay from "../src/services/mpt/display";
-import * as MerkleHashingService from "../src/services/merkle/hash";
+import * as MPTService from "../src/services/mpt";
+import * as MerkleHashingService from "../src/services/merkle_tree";
 
 const fc = FastCheck;
 
 const TestLayer = Layer.mergeAll(
-  MPTQuery.MPTQueryLive,
-  MPTInsert.PatriciaInsertLive,
-  MPTDelete.PatriciaDeleteLive,
-  Layer.provide(MPTHash.MPTHashLive, MerkleHashingService.HashingServiceLive),
-  MPTDisplay.PatriciaDisplayServiceLive
+  MPTService.MPTQueryLive,
+  MPTService.PatriciaInsertLive,
+  MPTService.PatriciaDeleteLive,
+  Layer.provide(MPTService.MPTHashLive, MerkleHashingService.HashingServiceLive),
+  MPTService.PatriciaDisplayServiceLive
 );
 
 // ============================================================================
@@ -64,8 +60,8 @@ describe("MPT Property-Based Tests", () => {
 
     it.effect("maintains canonical structure after mutations", () =>
       Effect.gen(function* () {
-        const ins = yield* MPTInsert.MPTInsert;
-        const del = yield* MPTDelete.PatriciaDelete;
+        const ins = yield* MPTService.MPTInsert;
+        const del = yield* MPTService.PatriciaDelete;
 
         // arbitrary operations
         const Operations = Schema.Array(
@@ -117,8 +113,8 @@ describe("MPT Property-Based Tests", () => {
 describe("PatriciaInsert", () => {
   it.effect("should insert single key-value pair", () =>
     Effect.gen(function* () {
-      const insert = yield* MPTInsert.MPTInsert;
-      const query = yield* MPTQuery.MPTQuery;
+      const insert = yield* MPTService.MPTInsert;
+      const query = yield* MPTService.MPTQuery;
 
       const trie = MPT.makeEmptyTrie();
       const result = insert.insert(trie, "0xa1", "value1");
@@ -131,8 +127,8 @@ describe("PatriciaInsert", () => {
 
 it.effect("should insert multiple keys with different prefixes", () =>
   Effect.gen(function* () {
-    const insert = yield* MPTInsert.MPTInsert;
-    const query = yield* MPTQuery.MPTQuery;
+    const insert = yield* MPTService.MPTInsert;
+    const query = yield* MPTService.MPTQuery;
 
     let trie = MPT.makeEmptyTrie();
     trie = insert.insert(trie, "0xa1", "value1");
@@ -148,8 +144,8 @@ it.effect("should insert multiple keys with different prefixes", () =>
 
 it.effect("should insert keys with shared prefix", () =>
   Effect.gen(function* () {
-    const insert = yield* MPTInsert.MPTInsert;
-    const query = yield* MPTQuery.MPTQuery;
+    const insert = yield* MPTService.MPTInsert;
+    const query = yield* MPTService.MPTQuery;
 
     let trie = MPT.makeEmptyTrie();
     trie = insert.insert(trie, "0xa711355", "45.0 ETH");
@@ -165,8 +161,8 @@ it.effect("should insert keys with shared prefix", () =>
 
 it.effect("should update existing key value", () =>
   Effect.gen(function* () {
-    const insert = yield* MPTInsert.MPTInsert;
-    const query = yield* MPTQuery.MPTQuery;
+    const insert = yield* MPTService.MPTInsert;
+    const query = yield* MPTService.MPTQuery;
 
     let trie = MPT.makeEmptyTrie();
     trie = insert.insert(trie, "0xa1", "value1");
@@ -180,8 +176,8 @@ it.effect("should update existing key value", () =>
 
 it.effect("should handle keys that are prefixes of each other", () =>
   Effect.gen(function* () {
-    const insert = yield* MPTInsert.MPTInsert;
-    const query = yield* MPTQuery.MPTQuery;
+    const insert = yield* MPTService.MPTInsert;
+    const query = yield* MPTService.MPTQuery;
 
     let trie = MPT.makeEmptyTrie();
     trie = insert.insert(trie, "0xa1", "short");
@@ -227,10 +223,10 @@ it.effect("should handle keys that are prefixes of each other", () =>
 
 it.effect("should compress nodes after deletions leave a single path", () =>
   Effect.gen(function* () {
-    const insert = yield* MPTInsert.MPTInsert;
-    const del = yield* MPTDelete.PatriciaDelete;
-    const query = yield* MPTQuery.MPTQuery;
-    const display = yield* MPTDisplay.PatriciaDisplayService;
+    const insert = yield* MPTService.MPTInsert;
+    const del = yield* MPTService.PatriciaDelete;
+    const query = yield* MPTService.MPTQuery;
+    const display = yield* MPTService.PatriciaDisplayService;
 
     // trie with two keys sharing a prefix so a branch exists
     let trie = MPT.makeEmptyTrie();
@@ -258,7 +254,7 @@ it.effect("should compress nodes after deletions leave a single path", () =>
 describe("PatriciaQuery", () => {
   it.effect("should return None for non-existent key", () =>
     Effect.gen(function* () {
-      const query = yield* MPTQuery.MPTQuery;
+      const query = yield* MPTService.MPTQuery;
 
       const trie = MPT.makeEmptyTrie();
       const result = query.query(trie, "0xa1");
@@ -269,8 +265,8 @@ describe("PatriciaQuery", () => {
 
   it.effect("should find inserted key", () =>
     Effect.gen(function* () {
-      const insert = yield* MPTInsert.MPTInsert;
-      const query = yield* MPTQuery.MPTQuery;
+      const insert = yield* MPTService.MPTInsert;
+      const query = yield* MPTService.MPTQuery;
 
       let trie = MPT.makeEmptyTrie();
       trie = insert.insert(trie, "0xa1b2c3", "test-value");
@@ -282,8 +278,8 @@ describe("PatriciaQuery", () => {
 
   it.effect("should distinguish between similar keys", () =>
     Effect.gen(function* () {
-      const insert = yield* MPTInsert.MPTInsert;
-      const query = yield* MPTQuery.MPTQuery;
+      const insert = yield* MPTService.MPTInsert;
+      const query = yield* MPTService.MPTQuery;
 
       let trie = MPT.makeEmptyTrie();
       trie = insert.insert(trie, "0xabc1", "value1");
@@ -300,8 +296,8 @@ describe("PatriciaQuery", () => {
 
   it.effect("should handle prefix queries correctly", () =>
     Effect.gen(function* () {
-      const insert = yield* MPTInsert.MPTInsert;
-      const query = yield* MPTQuery.MPTQuery;
+      const insert = yield* MPTService.MPTInsert;
+      const query = yield* MPTService.MPTQuery;
 
       let trie = MPT.makeEmptyTrie();
       trie = insert.insert(trie, "0xabc1", "value");
@@ -329,9 +325,9 @@ describe("PatriciaQuery", () => {
 describe("PatriciaDelete", () => {
   it.effect("should delete existing key", () =>
     Effect.gen(function* () {
-      const insert = yield* MPTInsert.MPTInsert;
-      const del = yield* MPTDelete.PatriciaDelete;
-      const query = yield* MPTQuery.MPTQuery;
+      const insert = yield* MPTService.MPTInsert;
+      const del = yield* MPTService.PatriciaDelete;
+      const query = yield* MPTService.MPTQuery;
 
       let trie = MPT.makeEmptyTrie();
       trie = insert.insert(trie, "0xa1", "value1");
@@ -349,8 +345,8 @@ describe("PatriciaDelete", () => {
 
   it.effect("should handle deleting non-existent key", () =>
     Effect.gen(function* () {
-      const insert = yield* MPTInsert.MPTInsert;
-      const del = yield* MPTDelete.PatriciaDelete;
+      const insert = yield* MPTService.MPTInsert;
+      const del = yield* MPTService.PatriciaDelete;
 
       let trie = MPT.makeEmptyTrie();
       trie = insert.insert(trie, "0xa1", "value1");
@@ -364,9 +360,9 @@ describe("PatriciaDelete", () => {
 
   it.effect("should delete from multiple keys", () =>
     Effect.gen(function* () {
-      const insert = yield* MPTInsert.MPTInsert;
-      const del = yield* MPTDelete.PatriciaDelete;
-      const query = yield* MPTQuery.MPTQuery;
+      const insert = yield* MPTService.MPTInsert;
+      const del = yield* MPTService.PatriciaDelete;
+      const query = yield* MPTService.MPTQuery;
 
       let trie = MPT.makeEmptyTrie();
       trie = insert.insert(trie, "0xa11", "value1");
@@ -387,8 +383,8 @@ describe("PatriciaDelete", () => {
 
   it.effect("should handle deleting all keys", () =>
     Effect.gen(function* () {
-      const insert = yield* MPTInsert.MPTInsert;
-      const del = yield* MPTDelete.PatriciaDelete;
+      const insert = yield* MPTService.MPTInsert;
+      const del = yield* MPTService.PatriciaDelete;
 
       let trie = MPT.makeEmptyTrie();
       trie = insert.insert(trie, "0xa11", "value1");
@@ -403,9 +399,9 @@ describe("PatriciaDelete", () => {
 
   it.effect("should delete key with shared prefix", () =>
     Effect.gen(function* () {
-      const insert = yield* MPTInsert.MPTInsert;
-      const del = yield* MPTDelete.PatriciaDelete;
-      const query = yield* MPTQuery.MPTQuery;
+      const insert = yield* MPTService.MPTInsert;
+      const del = yield* MPTService.PatriciaDelete;
+      const query = yield* MPTService.MPTQuery;
 
       let trie = MPT.makeEmptyTrie();
       trie = insert.insert(trie, "0xabc1", "value1");
@@ -432,7 +428,7 @@ describe("PatriciaDelete", () => {
 describe("PatriciaHash", () => {
   it.effect("should compute deterministic hash for empty trie", () =>
     Effect.gen(function* () {
-      const hash = yield* MPTHash.MPTHash;
+      const hash = yield* MPTService.MPTHash;
 
       const trie = MPT.makeEmptyTrie();
       const rootHash1 = hash.calculateRootHash(trie);
@@ -445,8 +441,8 @@ describe("PatriciaHash", () => {
 
   it.effect("should compute deterministic hash for populated trie", () =>
     Effect.gen(function* () {
-      const insert = yield* MPTInsert.MPTInsert;
-      const hash = yield* MPTHash.MPTHash;
+      const insert = yield* MPTService.MPTInsert;
+      const hash = yield* MPTService.MPTHash;
 
       let trie = MPT.makeEmptyTrie();
       trie = insert.insert(trie, "0xa11", "value1");
@@ -461,8 +457,8 @@ describe("PatriciaHash", () => {
 
   it.effect("should produce different hashes for different content", () =>
     Effect.gen(function* () {
-      const insert = yield* MPTInsert.MPTInsert;
-      const hash = yield* MPTHash.MPTHash;
+      const insert = yield* MPTService.MPTInsert;
+      const hash = yield* MPTService.MPTHash;
 
       let trie1 = MPT.makeEmptyTrie();
       trie1 = insert.insert(trie1, "0xa1", "value1");
@@ -479,8 +475,8 @@ describe("PatriciaHash", () => {
 
   it.effect("should produce different hashes for different keys", () =>
     Effect.gen(function* () {
-      const insert = yield* MPTInsert.MPTInsert;
-      const hash = yield* MPTHash.MPTHash;
+      const insert = yield* MPTService.MPTInsert;
+      const hash = yield* MPTService.MPTHash;
 
       let trie1 = MPT.makeEmptyTrie();
       trie1 = insert.insert(trie1, "0xa1", "value");
@@ -497,8 +493,8 @@ describe("PatriciaHash", () => {
 
   it.effect("should produce same hash regardless of insertion order", () =>
     Effect.gen(function* () {
-      const insert = yield* MPTInsert.MPTInsert;
-      const hash = yield* MPTHash.MPTHash;
+      const insert = yield* MPTService.MPTInsert;
+      const hash = yield* MPTService.MPTHash;
 
       // First order: a11, a22, a33
       let trie1 = MPT.makeEmptyTrie();
@@ -527,7 +523,7 @@ describe("PatriciaHash", () => {
 describe("PatriciaDisplayService", () => {
   it.effect("should display empty trie", () =>
     Effect.gen(function* () {
-      const display = yield* MPTDisplay.PatriciaDisplayService;
+      const display = yield* MPTService.PatriciaDisplayService;
 
       const trie = MPT.makeEmptyTrie();
       const trieDisplay = display.displayTrie(trie);
@@ -539,8 +535,8 @@ describe("PatriciaDisplayService", () => {
 
   it.effect("should display single leaf trie", () =>
     Effect.gen(function* () {
-      const insert = yield* MPTInsert.MPTInsert;
-      const display = yield* MPTDisplay.PatriciaDisplayService;
+      const insert = yield* MPTService.MPTInsert;
+      const display = yield* MPTService.PatriciaDisplayService;
 
       let trie = MPT.makeEmptyTrie();
       trie = insert.insert(trie, "0xabc", "test-value");
@@ -557,8 +553,8 @@ describe("PatriciaDisplayService", () => {
     "should display ethereum state trie with shared nibble prefix",
     () =>
       Effect.gen(function* () {
-        const display = yield* MPTDisplay.PatriciaDisplayService;
-        const insert = yield* MPTInsert.MPTInsert;
+        const display = yield* MPTService.PatriciaDisplayService;
+        const insert = yield* MPTService.MPTInsert;
 
         // Build trie with 4 Ethereum addresses sharing prefix "a7"
         // ie 4 leaf nodes:
@@ -616,7 +612,7 @@ describe("PatriciaDisplayService", () => {
 
   it.effect("should display node types correctly", () =>
     Effect.gen(function* () {
-      const display = yield* MPTDisplay.PatriciaDisplayService;
+      const display = yield* MPTService.PatriciaDisplayService;
 
       // Test leaf node display
       const leaf = MPT.makeLeaf({
@@ -648,8 +644,8 @@ describe("PatriciaDisplayService", () => {
     "should display trie with keys that are prefixes of each other",
     () =>
       Effect.gen(function* () {
-        const display = yield* MPTDisplay.PatriciaDisplayService;
-        const insert = yield* MPTInsert.MPTInsert;
+        const display = yield* MPTService.PatriciaDisplayService;
+        const insert = yield* MPTService.MPTInsert;
 
         // Build trie with 3 keys where each is a prefix of the next:
         // k = a1; v = "short"

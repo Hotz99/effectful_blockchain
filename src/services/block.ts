@@ -16,7 +16,7 @@ import * as Block from "../entities/block";
 import * as Event from "../entities/event";
 import { keccak256, toUtf8Bytes } from "ethers";
 import * as MerkleTree from "../entities/merkle_tree";
-import * as MerkleTreeService from "./merkle";
+import * as MerkleTreeService from "./merkle_tree";
 
 // ============================================================================
 // SERVICE INTERFACE
@@ -113,7 +113,7 @@ export const BlockServiceLive = Layer.effect(
   BlockService,
   Effect.gen(function* () {
     // Dependencies resolved here, not leaked through service interface
-    const merkleBuild = yield* MerkleTreeService.MerkleBuildService;
+    const merkleBuild = yield* MerkleTreeService.MerkleBuild;
     const merkleRoot = yield* MerkleTreeService.MerkleRoot;
 
     // TODO move this to `merkle_service` ?

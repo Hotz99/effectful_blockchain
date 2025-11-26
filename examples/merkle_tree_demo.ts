@@ -1,16 +1,11 @@
 import { Effect, Chunk, Either, Layer, DateTime, Option } from "effect";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as MerkleTree from "../src/entities/merkle_tree";
-import * as MerkleHashingService from "../src/services/merkle/hash";
-import * as MerkleTreeService from "../src/services/merkle";
+import * as MerkleHashingService from "../src/services/merkle_tree";
+import * as MerkleTreeService from "../src/services/merkle_tree";
 import * as Event from "../src/entities/event";
 import * as BlockchainService from "../src/services/blockchain";
 import * as BlockService from "../src/services/block";
-
-const header = (title: string) => {
-  const separator = "=".repeat(70);
-  return `${separator}\n${title}\n${separator}`;
-};
 
 const program = Effect.gen(function* () {
   yield* Effect.logInfo(
@@ -50,7 +45,7 @@ const program = Effect.gen(function* () {
   yield* Effect.log("\nBuilding Merkle tree with 4 transactions...");
 
   // Build the tree
-  const builder = yield* MerkleTreeService.MerkleBuildService;
+  const builder = yield* MerkleTreeService.MerkleBuild;
   const tree = builder.build(transactions);
 
   yield* Effect.log("\nTree Structure:");

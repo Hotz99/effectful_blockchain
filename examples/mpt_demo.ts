@@ -1,9 +1,7 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { Effect, Layer, Option } from "effect";
 import * as MPT from "../src/entities/mpt";
-import * as MPTInsert from "../src/services/mpt/insert";
-import * as MPTDisplay from "../src/services/mpt/display";
-import { compressNode } from "../src/services/mpt/internal";
+import * as MPTService from "../src/services/mpt";
 
 /**
  * Count node types in the trie structure.
@@ -33,8 +31,8 @@ const calculateTrieSize = (node: MPT.PatriciaNode): number => {
 };
 
 const program = Effect.gen(function* () {
-  const insertService = yield* MPTInsert.MPTInsert;
-  const displayService = yield* MPTDisplay.PatriciaDisplayService;
+  const insertService = yield* MPTService.MPTInsert;
+  const displayService = yield* MPTService.PatriciaDisplayService;
 
   yield* Effect.logInfo(
     `${"=".repeat(70)}\nPatricia Trie Compression Demo\n${"=".repeat(70)}\n`
@@ -131,7 +129,7 @@ const program = Effect.gen(function* () {
   yield* Effect.log("Step 3: Running compression");
   yield* Effect.log("-".repeat(70));
 
-  const compressedRoot = compressNode(trie.root);
+  const compressedRoot = MPTService.compressNode(trie.root);
   const compressedTrie = MPT.makeTrie(compressedRoot, trie.size);
 
   yield* Effect.log(
@@ -211,8 +209,8 @@ const program = Effect.gen(function* () {
 });
 
 const MainLive = Layer.mergeAll(
-  MPTInsert.PatriciaInsertLive,
-  MPTDisplay.PatriciaDisplayServiceLive
+  MPTService.PatriciaInsertLive,
+  MPTService.PatriciaDisplayServiceLive
 );
 
 program.pipe(Effect.provide(MainLive), NodeRuntime.runMain);
